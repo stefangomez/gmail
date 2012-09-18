@@ -3,7 +3,24 @@ module Gmail
     # Raised when connection with GMail IMAP service couldn't be established. 
     class ConnectionError < SocketError; end
     # Raised when given username or password are invalid.
-    class AuthorizationError < Net::IMAP::NoResponseError; end
+    class AuthorizationError < Net::IMAP::NoResponseError;
+      def initialize(response)
+        super(response) if response
+      end
+
+      def exception(message = nil)
+        return self if message == nil || message == self
+        return self if response # We already have a perfectly fine message, thank you very much
+
+        StandardError.instance_method(:initialize).bind(self).call(message.to_str)
+
+        self
+      end
+
+      def to_str
+        @message
+      end
+    end
     # Raised when delivered email is invalid. 
     class DeliveryError < ArgumentError; end
     # Raised when given client is not registered
@@ -14,7 +31,7 @@ module Gmail
       @clients[name] = klass
     end
 
-    def self.new(name, *args)
+    def self.new_client(name, *args)
       if client = @clients[name]
         client.new(*args)
       else
@@ -26,5 +43,6 @@ module Gmail
     require 'gmail/client/base'
     require 'gmail/client/plain'
     require 'gmail/client/xoauth'
+    require 'gmail/client/xoauth2'
   end # Client
 end # Gmail
