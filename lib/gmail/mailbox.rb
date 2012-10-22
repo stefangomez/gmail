@@ -62,11 +62,7 @@ module Gmail
         opts[:query]      and search.concat opts[:query]
 
         @gmail.mailbox(name) do
-          @gmail.conn.uid_search(search).collect do |uid| 
-            message = (messages[uid] ||= Message.new(self, uid))
-            block.call(message) if block_given?
-            message
-          end
+          imap_uid_search(search)
         end
       elsif args.first.is_a?(Hash)
         emails(:all, args.first)
@@ -78,6 +74,15 @@ module Gmail
     alias :search :emails
     alias :find :emails
     alias :filter :emails
+    
+    # Convenience method to do custom uid searches
+    def imap_uid_search(search)
+      @gmail.conn.uid_search(search).collect do |uid| 
+        message = (messages[uid] ||= Message.new(self, uid))
+        block.call(message) if block_given?
+        message
+      end
+    end
 
     # This is a convenience method that really probably shouldn't need to exist, 
     # but it does make code more readable, if seriously all you want is the count 
