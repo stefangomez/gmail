@@ -16,6 +16,10 @@ module Gmail
     def labels
       @gmail.conn.uid_fetch(uid, "X-GM-LABELS")[0].attr["X-GM-LABELS"]
     end
+    
+    def google_thread_id
+      @google_thread_id ||= @gmail.conn.uid_fetch(uid, 'X-GM-THRID')[0].attr['X-GM-THRID']
+    end
 
     def google_id
       @google_id ||= @gmail.conn.uid_fetch(uid, 'X-GM-MSGID')[0].attr['X-GM-MSGID']
