@@ -5,7 +5,7 @@ module Gmail
     # Raised when given label doesn't exists.
     class NoLabelError < Exception; end 
   
-    attr_reader :uid
+    attr_reader :uid, :mailbox
     
     def initialize(mailbox, uid)
       @uid     = uid
@@ -14,9 +14,25 @@ module Gmail
     end
         
     def labels
-      @gmail.conn.uid_fetch(uid, "X-GM-LABELS")[0].attr["X-GM-LABELS"]
+      @labels ||= @gmail.conn.uid_fetch(uid, "X-GM-LABELS")[0].attr["X-GM-LABELS"]
     end
-    
+
+    def flags
+      @flags ||= @gmail.conn.uid_fetch(uid, "FLAGS")[0].attr["FLAGS"]
+    end
+
+    def is_read?
+      flags.include? :Seen
+    end
+
+    def is_starred?
+      labels.include? :Starred
+    end
+
+    def is_important?
+      labels.include? :Important
+    end
+
     def google_thread_id
       @google_thread_id ||= @gmail.conn.uid_fetch(uid, 'X-GM-THRID')[0].attr['X-GM-THRID']
     end
@@ -38,7 +54,16 @@ module Gmail
     def unflag(name)
       !!@gmail.mailbox(@mailbox.name) { @gmail.conn.uid_store(uid, "-FLAGS", [name]) }
     end
-    
+
+    # Proper way to label/star/move to inbox
+    def gmail_flag(name)
+      !!@gmail.mailbox(@mailbox.name) { @gmail.conn.uid_store(uid, "+X-GM-LABELS", [name]) }
+    end
+
+    def gmail_unflag(name)
+      !!@gmail.mailbox(@mailbox.name) { @gmail.conn.uid_store(uid, "-X-GM-LABELS", [name]) }
+    end
+
     # Do commonly used operations on message. 
     def mark(flag)
       case flag
@@ -68,14 +93,22 @@ module Gmail
     
     # Mark message with star.
     def star!
-      flag('[Gmail]/Starred')
+      gmail_flag(:Starred)
     end
     
     # Remove message from list of starred.
     def unstar!
-      unflag('[Gmail]/Starred')
+      gmail_unflag(:Starred)
     end
-    
+
+    def important!
+      gmail_flag(:Important)
+    end
+
+    def unimportant!
+      gmail_unflag(:Important)
+    end
+
     # Move to trash / bin.
     def delete!
       @mailbox.messages.delete(uid)
@@ -88,7 +121,8 @@ module Gmail
 
     # Archive this message.
     def archive!
-      move_to('[Gmail]/All Mail')
+      #move_to('[Gmail]/All Mail')
+      gmail_unflag(:Inbox)
     end
     
     # Move to given box and delete from others.  
@@ -166,8 +200,10 @@ module Gmail
     end
     
     def message
-      @message ||= Mail.new(@gmail.mailbox(@mailbox.name) { 
-        @gmail.conn.uid_fetch(uid, "RFC822")[0].attr["RFC822"] # RFC822
+      @message ||= Mail.new(@gmail.mailbox(@mailbox.name) {
+        request,part = 'RFC822','RFC822'
+        request,part = 'BODY.PEEK[]','BODY[]' if @gmail.peek
+        @gmail.conn.uid_fetch(uid, request)[0].attr[part] # RFC822
       })
     end
     alias_method :raw_message, :message
